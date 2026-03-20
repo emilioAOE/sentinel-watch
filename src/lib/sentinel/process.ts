@@ -22,6 +22,10 @@ export async function processRequest(
             timeRange: params.timeRange,
           },
           mosaicking: "SIMPLE",
+          processing: {
+            upsampling: "BICUBIC",
+            downsampling: "BICUBIC",
+          },
         },
       ],
     },

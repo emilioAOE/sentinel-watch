@@ -98,6 +98,17 @@ export default function AnalysisPanel() {
       const from = format(subDays(dateObj, 2), "yyyy-MM-dd");
       const to = format(addDays(dateObj, 2), "yyyy-MM-dd");
 
+      // Calculate proportional dimensions from bbox aspect ratio
+      const [west, south, east, north] = zone.bbox;
+      const aspectRatio = Math.abs(east - west) / Math.abs(north - south);
+      let width = resolution;
+      let height = resolution;
+      if (aspectRatio > 1) {
+        height = Math.round(resolution / aspectRatio);
+      } else {
+        width = Math.round(resolution * aspectRatio);
+      }
+
       const res = await fetch("/api/sentinel/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,8 +119,8 @@ export default function AnalysisPanel() {
             to: `${to}T23:59:59Z`,
           },
           evalscriptType: evalscript,
-          width: resolution,
-          height: resolution,
+          width,
+          height,
         }),
       });
 

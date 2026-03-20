@@ -4,16 +4,34 @@ const TRUE_COLOR = `//VERSION=3
 function setup() {
   return { input: ["B04", "B03", "B02", "dataMask"], output: { bands: 4 } };
 }
+function stretch(val) {
+  return 3.0 * val / (val + 0.15);
+}
+function saturate(r, g, b, boost) {
+  var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return [lum + (r - lum) * boost, lum + (g - lum) * boost, lum + (b - lum) * boost];
+}
 function evaluatePixel(s) {
-  return [2.5*s.B04, 2.5*s.B03, 2.5*s.B02, s.dataMask];
+  var r = stretch(s.B04), g = stretch(s.B03), b = stretch(s.B02);
+  var c = saturate(r, g, b, 1.3);
+  return [c[0], c[1], c[2], s.dataMask];
 }`;
 
 const FALSE_COLOR = `//VERSION=3
 function setup() {
   return { input: ["B08", "B04", "B03", "dataMask"], output: { bands: 4 } };
 }
+function stretch(val) {
+  return 3.0 * val / (val + 0.15);
+}
+function saturate(r, g, b, boost) {
+  var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return [lum + (r - lum) * boost, lum + (g - lum) * boost, lum + (b - lum) * boost];
+}
 function evaluatePixel(s) {
-  return [2.5*s.B08, 2.5*s.B04, 2.5*s.B03, s.dataMask];
+  var r = stretch(s.B08), g = stretch(s.B04), b = stretch(s.B03);
+  var c = saturate(r, g, b, 1.3);
+  return [c[0], c[1], c[2], s.dataMask];
 }`;
 
 const NDVI = `//VERSION=3
@@ -59,13 +77,16 @@ const ROAD_DETECTION = `//VERSION=3
 function setup() {
   return { input: ["B02", "B03", "B04", "B08", "B11", "dataMask"], output: { bands: 4 } };
 }
+function stretch(val) {
+  return 3.0 * val / (val + 0.15);
+}
 function evaluatePixel(s) {
-  let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
-  let bsi = ((s.B11 + s.B04) - (s.B08 + s.B02)) / ((s.B11 + s.B04) + (s.B08 + s.B02));
+  var ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
+  var bsi = ((s.B11 + s.B04) - (s.B08 + s.B02)) / ((s.B11 + s.B04) + (s.B08 + s.B02));
   if (ndvi < 0.15 && bsi > 0.1) return [1.0, 0.2, 0.2, s.dataMask];
   if (ndvi < 0.25 && bsi > 0.0) return [1.0, 0.6, 0.2, s.dataMask];
-  let g = 2.5;
-  return [g*s.B04*0.6, g*s.B03*0.6, g*s.B02*0.6, s.dataMask];
+  var r = stretch(s.B04) * 0.6, g = stretch(s.B03) * 0.6, b = stretch(s.B02) * 0.6;
+  return [r, g, b, s.dataMask];
 }`;
 
 const evalscriptMap: Record<EvalscriptType, string> = {
