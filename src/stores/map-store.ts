@@ -9,6 +9,8 @@ interface MapState {
   overlayBbox: [number, number, number, number] | null;
   isLoading: boolean;
   selectedDate: string | null;
+  showBaseMap: boolean;
+  resolution: number;
 
   setSelectedZone: (id: string | null) => void;
   setOverlayOpacity: (opacity: number) => void;
@@ -16,6 +18,8 @@ interface MapState {
   setOverlay: (url: string | null, bbox: [number, number, number, number] | null) => void;
   setLoading: (loading: boolean) => void;
   setSelectedDate: (date: string | null) => void;
+  toggleBaseMap: () => void;
+  setResolution: (res: number) => void;
 }
 
 export const useMapStore = create<MapState>()((set) => ({
@@ -26,6 +30,8 @@ export const useMapStore = create<MapState>()((set) => ({
   overlayBbox: null,
   isLoading: false,
   selectedDate: null,
+  showBaseMap: true,
+  resolution: 1024,
 
   setSelectedZone: (id) => set({ selectedZoneId: id }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
@@ -33,4 +39,6 @@ export const useMapStore = create<MapState>()((set) => ({
   setOverlay: (url, bbox) => set({ overlayUrl: url, overlayBbox: bbox }),
   setLoading: (loading) => set({ isLoading: loading }),
   setSelectedDate: (date) => set({ selectedDate: date }),
+  toggleBaseMap: () => set((s) => ({ showBaseMap: !s.showBaseMap })),
+  setResolution: (res) => set({ resolution: res }),
 }));

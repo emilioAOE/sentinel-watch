@@ -20,6 +20,7 @@ export default function MapView() {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<L.ImageOverlay | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const zoneLayersRef = useRef<Map<string, L.Rectangle>>(new Map());
   const drawingRef = useRef<L.Rectangle | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -27,7 +28,7 @@ export default function MapView() {
 
   const zones = useZoneStore((s) => s.zones);
   const addZone = useZoneStore((s) => s.addZone);
-  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone } =
+  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap } =
     useMapStore();
 
   // Initialize map
@@ -40,7 +41,7 @@ export default function MapView() {
       zoomControl: true,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    tileLayerRef.current = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors",
       maxZoom: 19,
     }).addTo(map);
@@ -52,6 +53,18 @@ export default function MapView() {
       mapRef.current = null;
     };
   }, []);
+
+  // Toggle base map tiles
+  useEffect(() => {
+    const map = mapRef.current;
+    const tile = tileLayerRef.current;
+    if (!map || !tile) return;
+    if (showBaseMap) {
+      if (!map.hasLayer(tile)) tile.addTo(map);
+    } else {
+      if (map.hasLayer(tile)) map.removeLayer(tile);
+    }
+  }, [showBaseMap]);
 
   // Draw zones on map
   useEffect(() => {
@@ -190,6 +203,10 @@ export default function MapView() {
     [drawBbox, addZone, setSelectedZone]
   );
 
+  const flyTo = useCallback((lat: number, lng: number) => {
+    mapRef.current?.flyTo([lat, lng], 14);
+  }, []);
+
   const cancelDrawing = useCallback(() => {
     setIsDrawing(false);
     setDrawBbox(null);
@@ -213,6 +230,7 @@ export default function MapView() {
         onStartDraw={startDrawing}
         onConfirm={confirmZone}
         onCancel={cancelDrawing}
+        onFlyTo={flyTo}
       />
     </div>
   );

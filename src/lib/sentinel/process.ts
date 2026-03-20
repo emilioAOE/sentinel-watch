@@ -20,8 +20,8 @@ export async function processRequest(
           type: "sentinel-2-l2a",
           dataFilter: {
             timeRange: params.timeRange,
-            maxCloudCoverage: 30,
           },
+          mosaicking: "SIMPLE",
         },
       ],
     },
