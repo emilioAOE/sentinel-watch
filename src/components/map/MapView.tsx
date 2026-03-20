@@ -161,7 +161,7 @@ export default function MapView() {
       if (!startLatLng) return;
       if (drawingRef.current) map.removeLayer(drawingRef.current);
       drawingRef.current = L.rectangle(
-        [startLatLng, e.latlng],
+        L.latLngBounds(startLatLng!, e.latlng),
         { color: "#f97316", weight: 2, dashArray: "5 5", fillOpacity: 0.15 }
       ).addTo(map);
     };

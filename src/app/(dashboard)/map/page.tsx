@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import MapContainer from "@/components/map/MapContainer";
 import AnalysisPanel from "@/components/analysis/AnalysisPanel";
 import { useMapStore } from "@/stores/map-store";
 
-export default function MapPage() {
+function MapPageInner() {
   const searchParams = useSearchParams();
   const setSelectedZone = useMapStore((s) => s.setSelectedZone);
 
@@ -24,5 +24,13 @@ export default function MapPage() {
         <AnalysisPanel />
       </div>
     </div>
+  );
+}
+
+export default function MapPage() {
+  return (
+    <Suspense>
+      <MapPageInner />
+    </Suspense>
   );
 }
