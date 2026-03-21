@@ -11,6 +11,7 @@ export interface PlanetSearchResultItem {
   date: string; // YYYY-MM-DD
   cloud: number; // cloud cover percentage
   itemType: string; // e.g. "PSScene"
+  bbox: [number, number, number, number]; // [west, south, east, north]
 }
 
 export interface PlanetSearchResult {

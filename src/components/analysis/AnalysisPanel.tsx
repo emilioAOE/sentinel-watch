@@ -38,16 +38,17 @@ export default function AnalysisPanel() {
   const zone = useZoneStore((s) => s.zones.find((z) => z.id === selectedZoneId));
 
   const [availableDates, setAvailableDates] = useState<
-    { date: string; cloud: number; itemId?: string; itemType?: string }[]
+    { date: string; cloud: number; itemId?: string; itemType?: string; bbox?: [number, number, number, number] }[]
   >([]);
   const [datesLoading, setDatesLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [datesSearched, setDatesSearched] = useState(false);
 
-  // Store the selected Planet item info for tile fetching
+  // Store the selected Planet item info for thumbnail fetching
   const [selectedPlanetItem, setSelectedPlanetItem] = useState<{
     itemId: string;
     itemType: string;
+    bbox: [number, number, number, number];
   } | null>(null);
 
   const handleProviderChange = useCallback(
@@ -125,11 +126,12 @@ export default function AnalysisPanel() {
         if (data.error) throw new Error(data.error);
         if (data.items) {
           setAvailableDates(
-            data.items.map((item: { id: string; date: string; cloud: number; itemType: string }) => ({
+            data.items.map((item: { id: string; date: string; cloud: number; itemType: string; bbox: [number, number, number, number] }) => ({
               date: item.date,
               cloud: item.cloud,
               itemId: item.id,
               itemType: item.itemType,
+              bbox: item.bbox,
             }))
           );
         }
@@ -146,10 +148,10 @@ export default function AnalysisPanel() {
   }, [zone, provider]);
 
   const handleDateSelect = useCallback(
-    (d: { date: string; itemId?: string; itemType?: string }) => {
+    (d: { date: string; itemId?: string; itemType?: string; bbox?: [number, number, number, number] }) => {
       setSelectedDate(d.date);
-      if (d.itemId && d.itemType) {
-        setSelectedPlanetItem({ itemId: d.itemId, itemType: d.itemType });
+      if (d.itemId && d.itemType && d.bbox) {
+        setSelectedPlanetItem({ itemId: d.itemId, itemType: d.itemType, bbox: d.bbox });
       } else {
         setSelectedPlanetItem(null);
       }
@@ -203,7 +205,7 @@ export default function AnalysisPanel() {
         setPlanetTile(null, null); // Clear planet tiles
         setOverlay(url, zone.bbox);
       } else {
-        // Planet: get tile URL
+        // Planet: fetch thumbnail via proxy and display as image overlay
         if (!selectedPlanetItem) {
           throw new Error("No Planet scene selected");
         }
@@ -218,13 +220,20 @@ export default function AnalysisPanel() {
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Failed to get Planet tiles");
+          let errMsg = "Failed to get Planet imagery";
+          try {
+            const err = await res.json();
+            errMsg = err.error || errMsg;
+          } catch {
+            // response was not JSON (e.g. HTML error page)
+          }
+          throw new Error(errMsg);
         }
 
-        const data = await res.json();
-        setOverlay(null, null); // Clear sentinel overlay
-        setPlanetTile(data.tileUrl, selectedPlanetItem.itemId);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPlanetTile(null, null); // Clear planet tiles
+        setOverlay(url, selectedPlanetItem.bbox);
       }
     } catch (err) {
       console.error("Failed to fetch imagery:", err);
