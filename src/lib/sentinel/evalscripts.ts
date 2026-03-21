@@ -97,6 +97,35 @@ function evaluatePixel(s) {
   return [r, g, b, s.dataMask];
 }`;
 
+const CHANGE_DETECTION = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B02","B03","B04","B08","B11","dataMask"], units: "REFLECTANCE" }],
+    output: { bands: 4 },
+    mosaicking: "ORBIT"
+  };
+}
+function evaluatePixel(samples) {
+  if (samples.length < 2) return [0,0,0,0];
+  var after = samples[0];
+  var before = samples[samples.length - 1];
+
+  var ndviBefore = (before.B08 - before.B04) / (before.B08 + before.B04);
+  var ndviAfter = (after.B08 - after.B04) / (after.B08 + after.B04);
+  var ndviDiff = ndviAfter - ndviBefore;
+
+  var bsiBefore = ((before.B11+before.B04)-(before.B08+before.B02))/((before.B11+before.B04)+(before.B08+before.B02));
+  var bsiAfter = ((after.B11+after.B04)-(after.B08+after.B02))/((after.B11+after.B04)+(after.B08+after.B02));
+  var bsiDiff = bsiAfter - bsiBefore;
+
+  if (ndviDiff < -0.15) return [1.0, 0.2, 0.2, 1.0];
+  if (ndviDiff > 0.15) return [0.2, 0.8, 0.2, 1.0];
+  if (bsiDiff > 0.1) return [0.2, 0.4, 1.0, 1.0];
+  if (Math.abs(ndviDiff) > 0.05 || Math.abs(bsiDiff) > 0.05)
+    return [1.0, 0.8, 0.3, 0.6];
+  return [0, 0, 0, 0];
+}`;
+
 const evalscriptMap: Record<EvalscriptType, string> = {
   true_color: TRUE_COLOR,
   false_color: FALSE_COLOR,
@@ -104,6 +133,7 @@ const evalscriptMap: Record<EvalscriptType, string> = {
   ndbi: NDBI,
   bsi: BSI,
   road_detection: ROAD_DETECTION,
+  change_detection: CHANGE_DETECTION,
 };
 
 export function getEvalscript(type: EvalscriptType): string {
@@ -141,5 +171,12 @@ export const EVALSCRIPT_LEGENDS: Record<
     { color: "#ff3333", label: "High confidence road" },
     { color: "#ff9933", label: "Possible road" },
     { color: "#667766", label: "Background (desaturated)" },
+  ],
+  change_detection: [
+    { color: "#ff3333", label: "Vegetation loss" },
+    { color: "#33cc33", label: "Vegetation gain" },
+    { color: "#3366ff", label: "New construction / bare soil" },
+    { color: "#ffcc4d", label: "Minor change" },
+    { color: "transparent", label: "No change (transparent)" },
   ],
 };

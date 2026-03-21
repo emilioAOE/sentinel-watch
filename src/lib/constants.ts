@@ -24,6 +24,11 @@ export const EVALSCRIPT_TYPES = [
     label: "Road Detection",
     description: "Combined NDVI+BSI",
   },
+  {
+    id: "change_detection",
+    label: "Change Detection",
+    description: "Compare two dates",
+  },
 ] as const;
 
 export type EvalscriptType = (typeof EVALSCRIPT_TYPES)[number]["id"];

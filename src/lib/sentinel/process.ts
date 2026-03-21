@@ -2,10 +2,11 @@ import { getSentinelToken } from "./auth";
 import type { ProcessRequestParams } from "./types";
 
 export async function processRequest(
-  params: ProcessRequestParams
+  params: ProcessRequestParams & { mosaicking?: string }
 ): Promise<ArrayBuffer> {
   const token = await getSentinelToken();
   const format = params.format ?? "image/png";
+  const mosaicking = params.mosaicking ?? "SIMPLE";
 
   const body = {
     input: {
@@ -21,7 +22,7 @@ export async function processRequest(
           dataFilter: {
             timeRange: params.timeRange,
           },
-          mosaicking: "SIMPLE",
+          mosaicking,
           processing: {
             upsampling: "BICUBIC",
             downsampling: "BICUBIC",

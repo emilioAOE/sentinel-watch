@@ -35,12 +35,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Use ORBIT mosaicking for change detection (multi-temporal)
+    const mosaicking = evalscriptType === "change_detection" ? "ORBIT" : undefined;
+
     const buffer = await processRequest({
       bbox,
       timeRange,
       evalscript,
       width,
       height,
+      mosaicking,
     });
 
     return new NextResponse(buffer, {

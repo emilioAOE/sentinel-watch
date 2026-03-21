@@ -14,6 +14,9 @@ interface MapState {
   resolution: number;
   provider: ProviderId;
   esriActive: boolean;
+  esriTileUrl: string | null;
+  // Change detection: second date
+  selectedDateBefore: string | null;
 
   setSelectedZone: (id: string | null) => void;
   setOverlayOpacity: (opacity: number) => void;
@@ -25,6 +28,8 @@ interface MapState {
   setResolution: (res: number) => void;
   setProvider: (p: ProviderId) => void;
   setEsriActive: (active: boolean) => void;
+  setEsriTileUrl: (url: string | null) => void;
+  setSelectedDateBefore: (date: string | null) => void;
 }
 
 export const useMapStore = create<MapState>()((set) => ({
@@ -39,6 +44,8 @@ export const useMapStore = create<MapState>()((set) => ({
   resolution: 1024,
   provider: "sentinel",
   esriActive: false,
+  esriTileUrl: null,
+  selectedDateBefore: null,
 
   setSelectedZone: (id) => set({ selectedZoneId: id }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
@@ -50,4 +57,6 @@ export const useMapStore = create<MapState>()((set) => ({
   setResolution: (res) => set({ resolution: res }),
   setProvider: (p) => set({ provider: p }),
   setEsriActive: (active) => set({ esriActive: active }),
+  setEsriTileUrl: (url) => set({ esriTileUrl: url }),
+  setSelectedDateBefore: (date) => set({ selectedDateBefore: date }),
 }));

@@ -29,7 +29,7 @@ export default function MapView() {
 
   const zones = useZoneStore((s) => s.zones);
   const addZone = useZoneStore((s) => s.addZone);
-  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap, esriActive } =
+  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap, esriActive, esriTileUrl } =
     useMapStore();
 
   // Initialize map
@@ -67,27 +67,28 @@ export default function MapView() {
     }
   }, [showBaseMap]);
 
-  // Toggle ESRI satellite tile layer
+  // Toggle ESRI satellite tile layer (supports Wayback URL changes)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     if (esriActive) {
-      if (!esriLayerRef.current) {
-        esriLayerRef.current = L.tileLayer(ESRI_TILE_URL, {
-          attribution: "&copy; Esri, Maxar, Earthstar Geographics",
-          maxZoom: 19,
-        });
+      const url = esriTileUrl || ESRI_TILE_URL;
+      // Remove old layer if URL changed
+      if (esriLayerRef.current) {
+        map.removeLayer(esriLayerRef.current);
       }
-      if (!map.hasLayer(esriLayerRef.current)) {
-        esriLayerRef.current.addTo(map);
-      }
+      esriLayerRef.current = L.tileLayer(url, {
+        attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+        maxZoom: 19,
+      }).addTo(map);
     } else {
       if (esriLayerRef.current && map.hasLayer(esriLayerRef.current)) {
         map.removeLayer(esriLayerRef.current);
+        esriLayerRef.current = null;
       }
     }
-  }, [esriActive]);
+  }, [esriActive, esriTileUrl]);
 
   // Draw zones on map
   useEffect(() => {

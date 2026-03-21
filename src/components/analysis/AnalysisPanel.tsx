@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { format, subMonths, addDays, subDays } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -17,6 +17,12 @@ const RESOLUTION_OPTIONS = [
   { value: 2048, label: "2048px", pu: "~16 PU" },
 ];
 
+interface WaybackRelease {
+  releaseNum: number;
+  date: string;
+  title: string;
+}
+
 export default function AnalysisPanel() {
   const selectedZoneId = useMapStore((s) => s.selectedZoneId);
   const evalscript = useMapStore((s) => s.currentEvalscript);
@@ -27,6 +33,8 @@ export default function AnalysisPanel() {
   const setLoading = useMapStore((s) => s.setLoading);
   const selectedDate = useMapStore((s) => s.selectedDate);
   const setSelectedDate = useMapStore((s) => s.setSelectedDate);
+  const selectedDateBefore = useMapStore((s) => s.selectedDateBefore);
+  const setSelectedDateBefore = useMapStore((s) => s.setSelectedDateBefore);
   const showBaseMap = useMapStore((s) => s.showBaseMap);
   const toggleBaseMap = useMapStore((s) => s.toggleBaseMap);
   const resolution = useMapStore((s) => s.resolution);
@@ -35,6 +43,7 @@ export default function AnalysisPanel() {
   const setProvider = useMapStore((s) => s.setProvider);
   const esriActive = useMapStore((s) => s.esriActive);
   const setEsriActive = useMapStore((s) => s.setEsriActive);
+  const setEsriTileUrl = useMapStore((s) => s.setEsriTileUrl);
 
   const zone = useZoneStore((s) => s.zones.find((z) => z.id === selectedZoneId));
 
@@ -45,29 +54,58 @@ export default function AnalysisPanel() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [datesSearched, setDatesSearched] = useState(false);
 
+  // ESRI Wayback state
+  const [waybackReleases, setWaybackReleases] = useState<WaybackRelease[]>([]);
+  const [waybackLoading, setWaybackLoading] = useState(false);
+  const [selectedRelease, setSelectedRelease] = useState<number | null>(null);
+
+  // Load Wayback releases when ESRI provider is selected
+  useEffect(() => {
+    if (provider !== "esri" || waybackReleases.length > 0) return;
+    setWaybackLoading(true);
+    fetch("/api/esri/wayback")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.releases) setWaybackReleases(data.releases);
+      })
+      .catch((err) => console.error("Failed to load Wayback releases:", err))
+      .finally(() => setWaybackLoading(false));
+  }, [provider, waybackReleases.length]);
+
   const handleProviderChange = useCallback(
     (newProvider: typeof provider) => {
       if (newProvider === provider) return;
       setProvider(newProvider);
 
       if (newProvider === "esri") {
-        // Activate ESRI tile layer, clear Sentinel overlay
         setEsriActive(true);
         setOverlay(null, null);
         setAvailableDates([]);
         setSelectedDate(null);
+        setSelectedDateBefore(null);
         setDatesSearched(false);
         setErrorMessage(null);
       } else {
-        // Switch to Sentinel, deactivate ESRI
         setEsriActive(false);
+        setEsriTileUrl(null);
+        setSelectedRelease(null);
         setAvailableDates([]);
         setSelectedDate(null);
+        setSelectedDateBefore(null);
         setDatesSearched(false);
         setErrorMessage(null);
       }
     },
-    [provider, setProvider, setOverlay, setEsriActive, setSelectedDate]
+    [provider, setProvider, setOverlay, setEsriActive, setEsriTileUrl, setSelectedDate, setSelectedDateBefore]
+  );
+
+  const handleWaybackSelect = useCallback(
+    (release: WaybackRelease) => {
+      setSelectedRelease(release.releaseNum);
+      const url = `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${release.releaseNum}/{z}/{y}/{x}`;
+      setEsriTileUrl(url);
+    },
+    [setEsriTileUrl]
   );
 
   const searchDates = useCallback(async () => {
@@ -77,7 +115,9 @@ export default function AnalysisPanel() {
     setDatesSearched(false);
     try {
       const now = new Date();
-      const dateFrom = format(subMonths(now, 3), "yyyy-MM-dd");
+      // For change detection, search 12 months back instead of 3
+      const monthsBack = evalscript === "change_detection" ? 12 : 3;
+      const dateFrom = format(subMonths(now, monthsBack), "yyyy-MM-dd");
       const dateTo = format(now, "yyyy-MM-dd");
 
       const res = await fetch("/api/sentinel/catalog", {
@@ -88,7 +128,7 @@ export default function AnalysisPanel() {
           dateFrom,
           dateTo,
           maxCloudCoverage: 50,
-          limit: 30,
+          limit: evalscript === "change_detection" ? 60 : 30,
         }),
       });
       const data = await res.json();
@@ -120,16 +160,30 @@ export default function AnalysisPanel() {
     } finally {
       setDatesLoading(false);
     }
-  }, [zone]);
+  }, [zone, evalscript]);
+
+  const isChangeDetection = evalscript === "change_detection";
 
   const fetchImagery = useCallback(async () => {
     if (!zone || !selectedDate) return;
+    if (isChangeDetection && !selectedDateBefore) return;
     setLoading(true);
     setErrorMessage(null);
     try {
-      const dateObj = new Date(`${selectedDate}T12:00:00Z`);
-      const from = format(subDays(dateObj, 2), "yyyy-MM-dd");
-      const to = format(addDays(dateObj, 2), "yyyy-MM-dd");
+      let fromDate: string;
+      let toDate: string;
+
+      if (isChangeDetection && selectedDateBefore) {
+        // Use full range from before-date to after-date
+        const beforeObj = new Date(`${selectedDateBefore}T12:00:00Z`);
+        const afterObj = new Date(`${selectedDate}T12:00:00Z`);
+        fromDate = format(subDays(beforeObj, 1), "yyyy-MM-dd");
+        toDate = format(addDays(afterObj, 1), "yyyy-MM-dd");
+      } else {
+        const dateObj = new Date(`${selectedDate}T12:00:00Z`);
+        fromDate = format(subDays(dateObj, 2), "yyyy-MM-dd");
+        toDate = format(addDays(dateObj, 2), "yyyy-MM-dd");
+      }
 
       const [west, south, east, north] = zone.bbox;
       const aspectRatio = Math.abs(east - west) / Math.abs(north - south);
@@ -147,8 +201,8 @@ export default function AnalysisPanel() {
         body: JSON.stringify({
           bbox: zone.bbox,
           timeRange: {
-            from: `${from}T00:00:00Z`,
-            to: `${to}T23:59:59Z`,
+            from: `${fromDate}T00:00:00Z`,
+            to: `${toDate}T23:59:59Z`,
           },
           evalscriptType: evalscript,
           width,
@@ -170,7 +224,7 @@ export default function AnalysisPanel() {
     } finally {
       setLoading(false);
     }
-  }, [zone, selectedDate, evalscript, resolution, setOverlay, setLoading]);
+  }, [zone, selectedDate, selectedDateBefore, evalscript, resolution, isChangeDetection, setOverlay, setLoading]);
 
   const hasOverlay = useMapStore.getState().overlayUrl;
 
@@ -216,19 +270,42 @@ export default function AnalysisPanel() {
         </div>
       </div>
 
-      {/* ESRI mode - no date search needed, tiles are live */}
+      {/* ===== ESRI Wayback mode ===== */}
       {provider === "esri" && (
         <div className="space-y-2">
+          <p className="text-xs font-medium">Historical Snapshots</p>
           <p className="text-xs text-muted-foreground">
-            ESRI World Imagery is shown as a live tile layer. High resolution satellite imagery from Maxar, updated regularly. No date selection needed.
+            ESRI Wayback archive — {waybackReleases.length} snapshots from 2014 to present.
           </p>
-          <p className="text-xs text-muted-foreground">
-            Switch to Sentinel-2 for spectral analysis (NDVI, road detection, etc.) with specific dates.
-          </p>
+          {waybackLoading && <Skeleton className="h-20 w-full" />}
+          {waybackReleases.length > 0 && (
+            <div className="max-h-48 overflow-y-auto space-y-1 border rounded p-2">
+              {waybackReleases.map((r) => (
+                <button
+                  key={r.releaseNum}
+                  onClick={() => handleWaybackSelect(r)}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded flex justify-between items-center transition-colors ${
+                    selectedRelease === r.releaseNum
+                      ? "ring-2 ring-primary bg-accent font-medium"
+                      : "hover:bg-accent"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {selectedRelease === r.releaseNum && (
+                      <svg className="size-3 text-primary" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+                      </svg>
+                    )}
+                    {r.date}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Sentinel controls */}
+      {/* ===== Sentinel-2 mode ===== */}
       {provider === "sentinel" && (
         <>
           <div className="space-y-2">
@@ -238,7 +315,9 @@ export default function AnalysisPanel() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium">Available Dates</p>
+              <p className="text-xs font-medium">
+                {isChangeDetection ? "Available Dates (12 months)" : "Available Dates"}
+              </p>
               <Button size="sm" variant="outline" onClick={searchDates} disabled={datesLoading}>
                 {datesLoading ? "Searching..." : "Search Dates"}
               </Button>
@@ -246,10 +325,61 @@ export default function AnalysisPanel() {
             {datesLoading && <Skeleton className="h-20 w-full" />}
             {!datesLoading && datesSearched && availableDates.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2">
-                No clear imagery found for this zone in the last 3 months.
+                No clear imagery found for this zone.
               </p>
             )}
-            {availableDates.length > 0 && (
+
+            {/* Change detection: dual date picker */}
+            {isChangeDetection && availableDates.length > 0 && (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">Before (older date)</p>
+                  <div className="max-h-28 overflow-y-auto space-y-1 border rounded p-2">
+                    {availableDates.map((d) => (
+                      <button
+                        key={`before-${d.date}`}
+                        onClick={() => setSelectedDateBefore(d.date)}
+                        className={`w-full text-left text-xs px-2 py-1 rounded flex justify-between items-center transition-colors ${
+                          selectedDateBefore === d.date
+                            ? "ring-2 ring-red-500 bg-red-50 font-medium"
+                            : "hover:bg-accent"
+                        }`}
+                      >
+                        <span>{d.date}</span>
+                        <span className="text-muted-foreground">{d.cloud}%</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wide">After (newer date)</p>
+                  <div className="max-h-28 overflow-y-auto space-y-1 border rounded p-2">
+                    {availableDates.map((d) => (
+                      <button
+                        key={`after-${d.date}`}
+                        onClick={() => setSelectedDate(d.date)}
+                        className={`w-full text-left text-xs px-2 py-1 rounded flex justify-between items-center transition-colors ${
+                          selectedDate === d.date
+                            ? "ring-2 ring-green-500 bg-green-50 font-medium"
+                            : "hover:bg-accent"
+                        }`}
+                      >
+                        <span>{d.date}</span>
+                        <span className="text-muted-foreground">{d.cloud}%</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {selectedDateBefore && selectedDate && (
+                  <p className="text-xs text-muted-foreground">
+                    Comparing <strong>{selectedDateBefore}</strong> → <strong>{selectedDate}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Normal single date picker */}
+            {!isChangeDetection && availableDates.length > 0 && (
               <div className="max-h-40 overflow-y-auto space-y-1 border rounded p-2">
                 {availableDates.map((d) => (
                   <button
@@ -279,9 +409,17 @@ export default function AnalysisPanel() {
           <Button
             className="w-full"
             onClick={fetchImagery}
-            disabled={!selectedDate || isLoading}
+            disabled={
+              isChangeDetection
+                ? !selectedDate || !selectedDateBefore || isLoading
+                : !selectedDate || isLoading
+            }
           >
-            {isLoading ? "Fetching..." : "Fetch Imagery"}
+            {isLoading
+              ? "Fetching..."
+              : isChangeDetection
+                ? "Detect Changes"
+                : "Fetch Imagery"}
           </Button>
 
           {errorMessage && (
