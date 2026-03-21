@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { LONCOCHE_CENTER, DEFAULT_ZOOM } from "@/lib/constants";
+import { LONCOCHE_CENTER, DEFAULT_ZOOM, ESRI_TILE_URL } from "@/lib/constants";
 import { useZoneStore, type Zone } from "@/stores/zone-store";
 import { useMapStore } from "@/stores/map-store";
 import MapToolbar from "./MapToolbar";
@@ -21,6 +21,7 @@ export default function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<L.ImageOverlay | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const esriLayerRef = useRef<L.TileLayer | null>(null);
   const zoneLayersRef = useRef<Map<string, L.Rectangle>>(new Map());
   const drawingRef = useRef<L.Rectangle | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -28,7 +29,7 @@ export default function MapView() {
 
   const zones = useZoneStore((s) => s.zones);
   const addZone = useZoneStore((s) => s.addZone);
-  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap } =
+  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap, esriActive } =
     useMapStore();
 
   // Initialize map
@@ -65,6 +66,28 @@ export default function MapView() {
       if (map.hasLayer(tile)) map.removeLayer(tile);
     }
   }, [showBaseMap]);
+
+  // Toggle ESRI satellite tile layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (esriActive) {
+      if (!esriLayerRef.current) {
+        esriLayerRef.current = L.tileLayer(ESRI_TILE_URL, {
+          attribution: "&copy; Esri, Maxar, Earthstar Geographics",
+          maxZoom: 19,
+        });
+      }
+      if (!map.hasLayer(esriLayerRef.current)) {
+        esriLayerRef.current.addTo(map);
+      }
+    } else {
+      if (esriLayerRef.current && map.hasLayer(esriLayerRef.current)) {
+        map.removeLayer(esriLayerRef.current);
+      }
+    }
+  }, [esriActive]);
 
   // Draw zones on map
   useEffect(() => {

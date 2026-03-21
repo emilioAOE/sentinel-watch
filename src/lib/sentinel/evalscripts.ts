@@ -5,14 +5,18 @@ function setup() {
   return { input: ["B04", "B03", "B02", "dataMask"], output: { bands: 4 } };
 }
 function stretch(val) {
-  return 3.0 * val / (val + 0.15);
+  // Adaptive stretch: works for both dark vegetation and bright desert
+  // Maps 0-0.4 reflectance to 0-1 display range with gentle S-curve
+  var v = val * 2.5;
+  return v * v * (3.0 - 2.0 * v); // smoothstep for natural contrast
 }
+function clamp(v) { return v < 0.0 ? 0.0 : v > 1.0 ? 1.0 : v; }
 function saturate(r, g, b, boost) {
   var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return [lum + (r - lum) * boost, lum + (g - lum) * boost, lum + (b - lum) * boost];
+  return [clamp(lum + (r - lum) * boost), clamp(lum + (g - lum) * boost), clamp(lum + (b - lum) * boost)];
 }
 function evaluatePixel(s) {
-  var r = stretch(s.B04), g = stretch(s.B03), b = stretch(s.B02);
+  var r = clamp(stretch(s.B04)), g = clamp(stretch(s.B03)), b = clamp(stretch(s.B02));
   var c = saturate(r, g, b, 1.3);
   return [c[0], c[1], c[2], s.dataMask];
 }`;
@@ -22,14 +26,16 @@ function setup() {
   return { input: ["B08", "B04", "B03", "dataMask"], output: { bands: 4 } };
 }
 function stretch(val) {
-  return 3.0 * val / (val + 0.15);
+  var v = val * 2.5;
+  return v * v * (3.0 - 2.0 * v);
 }
+function clamp(v) { return v < 0.0 ? 0.0 : v > 1.0 ? 1.0 : v; }
 function saturate(r, g, b, boost) {
   var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return [lum + (r - lum) * boost, lum + (g - lum) * boost, lum + (b - lum) * boost];
+  return [clamp(lum + (r - lum) * boost), clamp(lum + (g - lum) * boost), clamp(lum + (b - lum) * boost)];
 }
 function evaluatePixel(s) {
-  var r = stretch(s.B08), g = stretch(s.B04), b = stretch(s.B03);
+  var r = clamp(stretch(s.B08)), g = clamp(stretch(s.B04)), b = clamp(stretch(s.B03));
   var c = saturate(r, g, b, 1.3);
   return [c[0], c[1], c[2], s.dataMask];
 }`;
@@ -78,14 +84,16 @@ function setup() {
   return { input: ["B02", "B03", "B04", "B08", "B11", "dataMask"], output: { bands: 4 } };
 }
 function stretch(val) {
-  return 3.0 * val / (val + 0.15);
+  var v = val * 2.5;
+  return v * v * (3.0 - 2.0 * v);
 }
+function clamp(v) { return v < 0.0 ? 0.0 : v > 1.0 ? 1.0 : v; }
 function evaluatePixel(s) {
   var ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
   var bsi = ((s.B11 + s.B04) - (s.B08 + s.B02)) / ((s.B11 + s.B04) + (s.B08 + s.B02));
   if (ndvi < 0.15 && bsi > 0.1) return [1.0, 0.2, 0.2, s.dataMask];
   if (ndvi < 0.25 && bsi > 0.0) return [1.0, 0.6, 0.2, s.dataMask];
-  var r = stretch(s.B04) * 0.6, g = stretch(s.B03) * 0.6, b = stretch(s.B02) * 0.6;
+  var r = clamp(stretch(s.B04)) * 0.6, g = clamp(stretch(s.B03)) * 0.6, b = clamp(stretch(s.B02)) * 0.6;
   return [r, g, b, s.dataMask];
 }`;
 

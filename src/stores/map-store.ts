@@ -13,8 +13,7 @@ interface MapState {
   showBaseMap: boolean;
   resolution: number;
   provider: ProviderId;
-  planetTileUrl: string | null;
-  planetItemId: string | null;
+  esriActive: boolean;
 
   setSelectedZone: (id: string | null) => void;
   setOverlayOpacity: (opacity: number) => void;
@@ -25,7 +24,7 @@ interface MapState {
   toggleBaseMap: () => void;
   setResolution: (res: number) => void;
   setProvider: (p: ProviderId) => void;
-  setPlanetTile: (url: string | null, itemId: string | null) => void;
+  setEsriActive: (active: boolean) => void;
 }
 
 export const useMapStore = create<MapState>()((set) => ({
@@ -39,8 +38,7 @@ export const useMapStore = create<MapState>()((set) => ({
   showBaseMap: true,
   resolution: 1024,
   provider: "sentinel",
-  planetTileUrl: null,
-  planetItemId: null,
+  esriActive: false,
 
   setSelectedZone: (id) => set({ selectedZoneId: id }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
@@ -51,5 +49,5 @@ export const useMapStore = create<MapState>()((set) => ({
   toggleBaseMap: () => set((s) => ({ showBaseMap: !s.showBaseMap })),
   setResolution: (res) => set({ resolution: res }),
   setProvider: (p) => set({ provider: p }),
-  setPlanetTile: (url, itemId) => set({ planetTileUrl: url, planetItemId: itemId }),
+  setEsriActive: (active) => set({ esriActive: active }),
 }));
