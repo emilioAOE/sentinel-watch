@@ -9,6 +9,7 @@ import IndexSelector from "./IndexSelector";
 import Legend from "./Legend";
 import { useMapStore } from "@/stores/map-store";
 import { useZoneStore } from "@/stores/zone-store";
+import { PROVIDERS } from "@/lib/constants";
 
 const RESOLUTION_OPTIONS = [
   { value: 512, label: "512px", pu: "~1 PU" },
@@ -30,15 +31,40 @@ export default function AnalysisPanel() {
   const toggleBaseMap = useMapStore((s) => s.toggleBaseMap);
   const resolution = useMapStore((s) => s.resolution);
   const setResolution = useMapStore((s) => s.setResolution);
+  const provider = useMapStore((s) => s.provider);
+  const setProvider = useMapStore((s) => s.setProvider);
+  const setPlanetTile = useMapStore((s) => s.setPlanetTile);
 
   const zone = useZoneStore((s) => s.zones.find((z) => z.id === selectedZoneId));
 
   const [availableDates, setAvailableDates] = useState<
-    { date: string; cloud: number }[]
+    { date: string; cloud: number; itemId?: string; itemType?: string }[]
   >([]);
   const [datesLoading, setDatesLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [datesSearched, setDatesSearched] = useState(false);
+
+  // Store the selected Planet item info for tile fetching
+  const [selectedPlanetItem, setSelectedPlanetItem] = useState<{
+    itemId: string;
+    itemType: string;
+  } | null>(null);
+
+  const handleProviderChange = useCallback(
+    (newProvider: typeof provider) => {
+      if (newProvider === provider) return;
+      setProvider(newProvider);
+      // Clear all overlays and dates when switching
+      setOverlay(null, null);
+      setPlanetTile(null, null);
+      setAvailableDates([]);
+      setSelectedDate(null);
+      setDatesSearched(false);
+      setErrorMessage(null);
+      setSelectedPlanetItem(null);
+    },
+    [provider, setProvider, setOverlay, setPlanetTile, setSelectedDate]
+  );
 
   const searchDates = useCallback(async () => {
     if (!zone) return;
@@ -47,98 +73,173 @@ export default function AnalysisPanel() {
     setDatesSearched(false);
     try {
       const now = new Date();
-      const res = await fetch("/api/sentinel/catalog", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bbox: zone.bbox,
-          dateFrom: format(subMonths(now, 3), "yyyy-MM-dd"),
-          dateTo: format(now, "yyyy-MM-dd"),
-          maxCloudCoverage: 50,
-          limit: 30,
-        }),
-      });
-      const data = await res.json();
-      if (data.features) {
-        const dates = data.features.map(
-          (f: { properties: { datetime: string; "eo:cloud_cover": number } }) => ({
-            date: f.properties.datetime.split("T")[0],
-            cloud: Math.round(f.properties["eo:cloud_cover"]),
-          })
-        );
-        // Deduplicate by date, keep lowest cloud
-        const unique = new Map<string, number>();
-        for (const d of dates) {
-          if (!unique.has(d.date) || unique.get(d.date)! > d.cloud) {
-            unique.set(d.date, d.cloud);
+      const dateFrom = format(subMonths(now, 3), "yyyy-MM-dd");
+      const dateTo = format(now, "yyyy-MM-dd");
+
+      if (provider === "sentinel") {
+        const res = await fetch("/api/sentinel/catalog", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bbox: zone.bbox,
+            dateFrom,
+            dateTo,
+            maxCloudCoverage: 50,
+            limit: 30,
+          }),
+        });
+        const data = await res.json();
+        if (data.features) {
+          const dates = data.features.map(
+            (f: { properties: { datetime: string; "eo:cloud_cover": number } }) => ({
+              date: f.properties.datetime.split("T")[0],
+              cloud: Math.round(f.properties["eo:cloud_cover"]),
+            })
+          );
+          const unique = new Map<string, number>();
+          for (const d of dates) {
+            if (!unique.has(d.date) || unique.get(d.date)! > d.cloud) {
+              unique.set(d.date, d.cloud);
+            }
           }
+          setAvailableDates(
+            Array.from(unique.entries())
+              .map(([date, cloud]) => ({ date, cloud }))
+              .sort((a, b) => b.date.localeCompare(a.date))
+          );
         }
-        setAvailableDates(
-          Array.from(unique.entries())
-            .map(([date, cloud]) => ({ date, cloud }))
-            .sort((a, b) => b.date.localeCompare(a.date))
-        );
+      } else {
+        // Planet search
+        const res = await fetch("/api/planet/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bbox: zone.bbox,
+            dateFrom,
+            dateTo,
+            maxCloudCoverage: 50,
+            limit: 30,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (data.items) {
+          setAvailableDates(
+            data.items.map((item: { id: string; date: string; cloud: number; itemType: string }) => ({
+              date: item.date,
+              cloud: item.cloud,
+              itemId: item.id,
+              itemType: item.itemType,
+            }))
+          );
+        }
       }
       setDatesSearched(true);
     } catch (err) {
       console.error("Failed to search dates:", err);
-      setErrorMessage("Failed to search for available dates.");
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to search for available dates."
+      );
     } finally {
       setDatesLoading(false);
     }
-  }, [zone]);
+  }, [zone, provider]);
+
+  const handleDateSelect = useCallback(
+    (d: { date: string; itemId?: string; itemType?: string }) => {
+      setSelectedDate(d.date);
+      if (d.itemId && d.itemType) {
+        setSelectedPlanetItem({ itemId: d.itemId, itemType: d.itemType });
+      } else {
+        setSelectedPlanetItem(null);
+      }
+    },
+    [setSelectedDate]
+  );
 
   const fetchImagery = useCallback(async () => {
     if (!zone || !selectedDate) return;
     setLoading(true);
     setErrorMessage(null);
     try {
-      // Widen timeRange +-2 days so mosaicker can find the tile
-      const dateObj = new Date(`${selectedDate}T12:00:00Z`);
-      const from = format(subDays(dateObj, 2), "yyyy-MM-dd");
-      const to = format(addDays(dateObj, 2), "yyyy-MM-dd");
+      if (provider === "sentinel") {
+        // Sentinel: fetch processed PNG
+        const dateObj = new Date(`${selectedDate}T12:00:00Z`);
+        const from = format(subDays(dateObj, 2), "yyyy-MM-dd");
+        const to = format(addDays(dateObj, 2), "yyyy-MM-dd");
 
-      // Calculate proportional dimensions from bbox aspect ratio
-      const [west, south, east, north] = zone.bbox;
-      const aspectRatio = Math.abs(east - west) / Math.abs(north - south);
-      let width = resolution;
-      let height = resolution;
-      if (aspectRatio > 1) {
-        height = Math.round(resolution / aspectRatio);
+        const [west, south, east, north] = zone.bbox;
+        const aspectRatio = Math.abs(east - west) / Math.abs(north - south);
+        let width = resolution;
+        let height = resolution;
+        if (aspectRatio > 1) {
+          height = Math.round(resolution / aspectRatio);
+        } else {
+          width = Math.round(resolution * aspectRatio);
+        }
+
+        const res = await fetch("/api/sentinel/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bbox: zone.bbox,
+            timeRange: {
+              from: `${from}T00:00:00Z`,
+              to: `${to}T23:59:59Z`,
+            },
+            evalscriptType: evalscript,
+            width,
+            height,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to fetch imagery");
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setPlanetTile(null, null); // Clear planet tiles
+        setOverlay(url, zone.bbox);
       } else {
-        width = Math.round(resolution * aspectRatio);
+        // Planet: get tile URL
+        if (!selectedPlanetItem) {
+          throw new Error("No Planet scene selected");
+        }
+
+        const res = await fetch("/api/planet/tiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemType: selectedPlanetItem.itemType,
+            itemId: selectedPlanetItem.itemId,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to get Planet tiles");
+        }
+
+        const data = await res.json();
+        setOverlay(null, null); // Clear sentinel overlay
+        setPlanetTile(data.tileUrl, selectedPlanetItem.itemId);
       }
-
-      const res = await fetch("/api/sentinel/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bbox: zone.bbox,
-          timeRange: {
-            from: `${from}T00:00:00Z`,
-            to: `${to}T23:59:59Z`,
-          },
-          evalscriptType: evalscript,
-          width,
-          height,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to fetch imagery");
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setOverlay(url, zone.bbox);
     } catch (err) {
       console.error("Failed to fetch imagery:", err);
       setErrorMessage(err instanceof Error ? err.message : "Failed to fetch imagery");
     } finally {
       setLoading(false);
     }
-  }, [zone, selectedDate, evalscript, resolution, setOverlay, setLoading]);
+  }, [zone, selectedDate, evalscript, resolution, provider, selectedPlanetItem, setOverlay, setPlanetTile, setLoading]);
+
+  const hasOverlay = useMapStore.getState().overlayUrl || useMapStore.getState().planetTileUrl;
+
+  const clearOverlay = useCallback(() => {
+    setOverlay(null, null);
+    setPlanetTile(null, null);
+  }, [setOverlay, setPlanetTile]);
 
   if (!zone) {
     return (
@@ -157,10 +258,34 @@ export default function AnalysisPanel() {
         </p>
       </div>
 
+      {/* Provider switcher */}
       <div className="space-y-2">
-        <p className="text-xs font-medium">Spectral Index</p>
-        <IndexSelector />
+        <p className="text-xs font-medium">Imagery Provider</p>
+        <div className="flex gap-1">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handleProviderChange(p.id)}
+              className={`flex-1 text-xs py-1.5 rounded border transition-colors ${
+                provider === p.id
+                  ? "ring-2 ring-primary bg-accent font-medium border-primary"
+                  : "border-border hover:bg-accent"
+              }`}
+            >
+              <div>{p.label}</div>
+              <div className="text-[10px] text-muted-foreground">{p.description}</div>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Spectral index - only for Sentinel */}
+      {provider === "sentinel" && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">Spectral Index</p>
+          <IndexSelector />
+        </div>
+      )}
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -179,8 +304,8 @@ export default function AnalysisPanel() {
           <div className="max-h-40 overflow-y-auto space-y-1 border rounded p-2">
             {availableDates.map((d) => (
               <button
-                key={d.date}
-                onClick={() => setSelectedDate(d.date)}
+                key={d.itemId || d.date}
+                onClick={() => handleDateSelect(d)}
                 className={`w-full text-left text-xs px-2 py-1.5 rounded flex justify-between items-center transition-colors ${
                   selectedDate === d.date
                     ? "ring-2 ring-primary bg-accent font-medium"
@@ -214,26 +339,28 @@ export default function AnalysisPanel() {
         <p className="text-xs text-destructive">{errorMessage}</p>
       )}
 
-      {/* Resolution selector */}
-      <div className="space-y-2">
-        <p className="text-xs font-medium">Resolution</p>
-        <div className="flex gap-1">
-          {RESOLUTION_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setResolution(opt.value)}
-              className={`flex-1 text-xs py-1.5 rounded border transition-colors ${
-                resolution === opt.value
-                  ? "ring-2 ring-primary bg-accent font-medium border-primary"
-                  : "border-border hover:bg-accent"
-              }`}
-            >
-              <div>{opt.label}</div>
-              <div className="text-[10px] text-muted-foreground">{opt.pu}</div>
-            </button>
-          ))}
+      {/* Resolution selector - only for Sentinel */}
+      {provider === "sentinel" && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">Resolution</p>
+          <div className="flex gap-1">
+            {RESOLUTION_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setResolution(opt.value)}
+                className={`flex-1 text-xs py-1.5 rounded border transition-colors ${
+                  resolution === opt.value
+                    ? "ring-2 ring-primary bg-accent font-medium border-primary"
+                    : "border-border hover:bg-accent"
+                }`}
+              >
+                <div>{opt.label}</div>
+                <div className="text-[10px] text-muted-foreground">{opt.pu}</div>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="space-y-2">
         <p className="text-xs font-medium">
@@ -248,8 +375,8 @@ export default function AnalysisPanel() {
         />
       </div>
 
-      {/* Base map toggle - show when overlay is active */}
-      {useMapStore.getState().overlayUrl && (
+      {/* Base map toggle - show when any overlay is active */}
+      {hasOverlay && (
         <button
           onClick={toggleBaseMap}
           className="flex items-center gap-2 text-xs w-full px-2 py-1.5 rounded border border-border hover:bg-accent transition-colors"
@@ -269,14 +396,15 @@ export default function AnalysisPanel() {
         </button>
       )}
 
-      <Legend />
+      {/* Legend - only for Sentinel */}
+      {provider === "sentinel" && <Legend />}
 
-      {useMapStore.getState().overlayUrl && (
+      {hasOverlay && (
         <Button
           variant="outline"
           size="sm"
           className="w-full"
-          onClick={() => setOverlay(null, null)}
+          onClick={clearOverlay}
         >
           Clear Overlay
         </Button>

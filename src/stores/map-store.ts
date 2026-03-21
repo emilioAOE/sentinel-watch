@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { EvalscriptType } from "@/lib/constants";
+import type { ProviderId } from "@/lib/constants";
 
 interface MapState {
   selectedZoneId: string | null;
@@ -11,6 +12,9 @@ interface MapState {
   selectedDate: string | null;
   showBaseMap: boolean;
   resolution: number;
+  provider: ProviderId;
+  planetTileUrl: string | null;
+  planetItemId: string | null;
 
   setSelectedZone: (id: string | null) => void;
   setOverlayOpacity: (opacity: number) => void;
@@ -20,6 +24,8 @@ interface MapState {
   setSelectedDate: (date: string | null) => void;
   toggleBaseMap: () => void;
   setResolution: (res: number) => void;
+  setProvider: (p: ProviderId) => void;
+  setPlanetTile: (url: string | null, itemId: string | null) => void;
 }
 
 export const useMapStore = create<MapState>()((set) => ({
@@ -32,6 +38,9 @@ export const useMapStore = create<MapState>()((set) => ({
   selectedDate: null,
   showBaseMap: true,
   resolution: 1024,
+  provider: "sentinel",
+  planetTileUrl: null,
+  planetItemId: null,
 
   setSelectedZone: (id) => set({ selectedZoneId: id }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
@@ -41,4 +50,6 @@ export const useMapStore = create<MapState>()((set) => ({
   setSelectedDate: (date) => set({ selectedDate: date }),
   toggleBaseMap: () => set((s) => ({ showBaseMap: !s.showBaseMap })),
   setResolution: (res) => set({ resolution: res }),
+  setProvider: (p) => set({ provider: p }),
+  setPlanetTile: (url, itemId) => set({ planetTileUrl: url, planetItemId: itemId }),
 }));

@@ -21,6 +21,7 @@ export default function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<L.ImageOverlay | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const planetLayerRef = useRef<L.TileLayer | null>(null);
   const zoneLayersRef = useRef<Map<string, L.Rectangle>>(new Map());
   const drawingRef = useRef<L.Rectangle | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -28,7 +29,7 @@ export default function MapView() {
 
   const zones = useZoneStore((s) => s.zones);
   const addZone = useZoneStore((s) => s.addZone);
-  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap } =
+  const { overlayUrl, overlayBbox, overlayOpacity, selectedZoneId, setSelectedZone, showBaseMap, provider, planetTileUrl } =
     useMapStore();
 
   // Initialize map
@@ -115,7 +116,7 @@ export default function MapView() {
     }
   }, [selectedZoneId]);
 
-  // Update satellite overlay
+  // Update Sentinel satellite overlay (imageOverlay)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -125,7 +126,7 @@ export default function MapView() {
       overlayRef.current = null;
     }
 
-    if (overlayUrl && overlayBbox) {
+    if (provider === "sentinel" && overlayUrl && overlayBbox) {
       const [west, south, east, north] = overlayBbox;
       overlayRef.current = L.imageOverlay(
         overlayUrl,
@@ -136,7 +137,26 @@ export default function MapView() {
         { opacity: overlayOpacity }
       ).addTo(map);
     }
-  }, [overlayUrl, overlayBbox, overlayOpacity]);
+  }, [provider, overlayUrl, overlayBbox, overlayOpacity]);
+
+  // Update Planet tile layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (planetLayerRef.current) {
+      map.removeLayer(planetLayerRef.current);
+      planetLayerRef.current = null;
+    }
+
+    if (provider === "planet" && planetTileUrl) {
+      planetLayerRef.current = L.tileLayer(planetTileUrl, {
+        maxZoom: 20,
+        attribution: "&copy; Planet Labs",
+        opacity: overlayOpacity,
+      }).addTo(map);
+    }
+  }, [provider, planetTileUrl, overlayOpacity]);
 
   // Handle drawing mode
   const startDrawing = useCallback(() => {

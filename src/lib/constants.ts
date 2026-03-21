@@ -27,3 +27,10 @@ export const EVALSCRIPT_TYPES = [
 ] as const;
 
 export type EvalscriptType = (typeof EVALSCRIPT_TYPES)[number]["id"];
+
+export const PROVIDERS = [
+  { id: "sentinel", label: "Sentinel-2", description: "10m resolution, free" },
+  { id: "planet", label: "Planet", description: "3m resolution" },
+] as const;
+
+export type ProviderId = (typeof PROVIDERS)[number]["id"];
