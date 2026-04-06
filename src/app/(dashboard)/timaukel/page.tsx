@@ -4,11 +4,12 @@ import { useEffect } from "react";
 import { useTimaukelStore } from "@/stores/timaukel-store";
 import TimaukelMapContainer from "@/components/timaukel/TimaukelMapContainer";
 import CompareViewContainer from "@/components/timaukel/CompareViewContainer";
+import GalleryGrid from "@/components/timaukel/GalleryGrid";
 import Timeline from "@/components/timaukel/Timeline";
 import VisualizationControls from "@/components/timaukel/VisualizationControls";
 import CasePanel from "@/components/timaukel/CasePanel";
 import { Button } from "@/components/ui/button";
-import { PanelRight } from "lucide-react";
+import { PanelRight, Map, LayoutGrid } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function TimaukelPage() {
@@ -16,6 +17,8 @@ export default function TimaukelPage() {
   const setDatesLoading = useTimaukelStore((s) => s.setDatesLoading);
   const setDatesError = useTimaukelStore((s) => s.setDatesError);
   const compareMode = useTimaukelStore((s) => s.compareMode);
+  const galleryMode = useTimaukelStore((s) => s.galleryMode);
+  const setGalleryMode = useTimaukelStore((s) => s.setGalleryMode);
   const casePanelOpen = useTimaukelStore((s) => s.casePanelOpen);
   const setCasePanelOpen = useTimaukelStore((s) => s.setCasePanelOpen);
 
@@ -65,10 +68,33 @@ export default function TimaukelPage() {
               Monitoreo Satelital — Estancia Timaukel
             </h1>
             <p className="text-xs text-muted-foreground">
-              Analisis de imagenes Sentinel-2 &bull; Periodo: Sep 2025 - Ene 2026
+              Analisis de imagenes Sentinel-2 &bull; Periodo: Sep 2025 - Ene
+              2026
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex gap-1 border rounded-md p-0.5">
+              <Button
+                variant={!galleryMode ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGalleryMode(false)}
+                className="text-xs h-7 px-2"
+              >
+                <Map className="h-3.5 w-3.5 mr-1" />
+                Mapa
+              </Button>
+              <Button
+                variant={galleryMode ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGalleryMode(true)}
+                className="text-xs h-7 px-2"
+              >
+                <LayoutGrid className="h-3.5 w-3.5 mr-1" />
+                Galeria
+              </Button>
+            </div>
+
             {!casePanelOpen && (
               <Button
                 variant="outline"
@@ -85,29 +111,40 @@ export default function TimaukelPage() {
 
         {/* Main content */}
         <div className="flex flex-1 min-h-0">
-          {/* Map area */}
-          <div className="flex-1 flex flex-col relative">
-            <div className="flex-1 relative">
-              {compareMode ? <CompareViewContainer /> : <TimaukelMapContainer />}
-
-              {/* Visualization controls overlay */}
-              {!compareMode && (
-                <div className="absolute top-3 right-3 z-[1000]">
-                  <VisualizationControls />
-                </div>
-              )}
-
-              {/* Visualization controls for compare mode (centered top) */}
-              {compareMode && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
-                  <VisualizationControls />
-                </div>
-              )}
+          {galleryMode ? (
+            /* Gallery view */
+            <div className="flex-1 flex flex-col">
+              <GalleryGrid />
             </div>
+          ) : (
+            /* Map area */
+            <div className="flex-1 flex flex-col relative">
+              <div className="flex-1 relative">
+                {compareMode ? (
+                  <CompareViewContainer />
+                ) : (
+                  <TimaukelMapContainer />
+                )}
 
-            {/* Timeline at bottom */}
-            {!compareMode && <Timeline />}
-          </div>
+                {/* Visualization controls overlay */}
+                {!compareMode && (
+                  <div className="absolute top-3 right-3 z-[1000]">
+                    <VisualizationControls />
+                  </div>
+                )}
+
+                {/* Visualization controls for compare mode (centered top) */}
+                {compareMode && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
+                    <VisualizationControls />
+                  </div>
+                )}
+              </div>
+
+              {/* Timeline at bottom */}
+              {!compareMode && <Timeline />}
+            </div>
+          )}
 
           {/* Case panel */}
           <CasePanel />

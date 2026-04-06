@@ -19,9 +19,14 @@ interface TimaukelState {
   compareDateLeft: string | null;
   compareDateRight: string | null;
 
+  galleryMode: boolean;
+  galleryCloudFilter: number;
+
   casePanelOpen: boolean;
   imageLoading: boolean;
 
+  setGalleryMode: (mode: boolean) => void;
+  setGalleryCloudFilter: (threshold: number) => void;
   setDates: (dates: DateEntry[]) => void;
   setDatesLoading: (loading: boolean) => void;
   setDatesError: (error: string | null) => void;
@@ -48,9 +53,14 @@ export const useTimaukelStore = create<TimaukelState>((set) => ({
   compareDateLeft: null,
   compareDateRight: null,
 
+  galleryMode: false,
+  galleryCloudFilter: 100,
+
   casePanelOpen: true,
   imageLoading: false,
 
+  setGalleryMode: (galleryMode) => set({ galleryMode, compareMode: false }),
+  setGalleryCloudFilter: (galleryCloudFilter) => set({ galleryCloudFilter }),
   setDates: (dates) => set({ dates }),
   setDatesLoading: (datesLoading) => set({ datesLoading }),
   setDatesError: (datesError) => set({ datesError }),

@@ -232,3 +232,73 @@ export const CASE_CHRONOLOGY: CaseEvent[] = [
       "Al realizar la marca se descubre un faltante significativo de ovejas. Se sospecha abigeato.",
   },
 ];
+
+// --- Zone views for gallery zoom ---
+
+export interface ZoneView {
+  id: string;
+  name: string;
+  shortName: string;
+  color: string;
+  bbox: [number, number, number, number]; // [west, south, east, north]
+}
+
+function bboxFromCoords(
+  coords: [number, number][],
+  padding = 0.003
+): [number, number, number, number] {
+  let minLat = Infinity,
+    maxLat = -Infinity,
+    minLng = Infinity,
+    maxLng = -Infinity;
+  for (const [lat, lng] of coords) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+  return [
+    minLng - padding,
+    minLat - padding,
+    maxLng + padding,
+    maxLat + padding,
+  ];
+}
+
+export const ZONE_VIEWS: ZoneView[] = [
+  {
+    id: "overview",
+    name: "Vista General",
+    shortName: "General",
+    color: "#ef4444",
+    bbox: TIMAUKEL_BBOX,
+  },
+  {
+    id: "consumo",
+    name: "Potrero Consumo",
+    shortName: "Consumo",
+    color: "#eab308",
+    bbox: bboxFromCoords(RANCH_POLYGONS[1].coordinates),
+  },
+  {
+    id: "el-seis",
+    name: "El Seis",
+    shortName: "El Seis",
+    color: "#22c55e",
+    bbox: bboxFromCoords(RANCH_POLYGONS[2].coordinates),
+  },
+  {
+    id: "pot-5",
+    name: "Pot 5 del Puesto",
+    shortName: "Pot 5",
+    color: "#3b82f6",
+    bbox: bboxFromCoords(RANCH_POLYGONS[3].coordinates),
+  },
+  {
+    id: "la-calle",
+    name: "La Calle (ruta de arreo)",
+    shortName: "La Calle",
+    color: "#f97316",
+    bbox: bboxFromCoords(RANCH_ROUTE.coordinates, 0.005),
+  },
+];
