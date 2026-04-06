@@ -19,6 +19,7 @@ import { useMapStore } from "@/stores/map-store";
 const navItems = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/map", label: "Map", icon: "🗺️" },
+  { href: "/timaukel", label: "Timaukel", icon: "🐑" },
 ];
 
 export default function AppSidebar() {
